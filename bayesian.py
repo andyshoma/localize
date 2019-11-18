@@ -3,9 +3,13 @@ import numpy as np
 from scipy.stats import norm
 
 class BaysianFilter:
-
-    # 初期位置
-    x = None
+    '''
+    使い方
+    1. インスタンス作成時に、初期位置・移動半径・基地局の座標・観測値の分散を引数として入力
+    2. readMap（マップ情報の取得）を呼び出す
+    2. prediction（予測ステップ）を呼び出す
+    3. update（更新ステップ）を呼び出す
+    '''
 
     # 移動場所の候補
     cood_list = None
@@ -38,11 +42,19 @@ class BaysianFilter:
     
     # コンストラクタ
     def __init__(self, x, c, p_i, sigma_range):
+        '''
+        引数は以下の４つ
+        ・x：初期位置
+        ・c：移動半径（グリッドの大きさを決定）
+        ・p_i：基地局の座標
+        ・sigma_range：観測値の分散
+        '''
         self.x_n = x
         self.c = c
         self.p_i = p_i
         self.sigma_range = sigma_range
         self.pri_cood_list = np.mat([[x[0, 0], x[1, 0]]])
+
     
     # マップ情報の読み込み
     def readMap(self, x_min, x_max, y_min, y_max):
@@ -54,8 +66,14 @@ class BaysianFilter:
 
     # 予測ステップ
     def prediction(self):
+        '''
+        1. t=n+1の時のグリッド候補の決定
+        2. グリッド候補が移動可能か判定（マップマッチング）
+        3. t=nの時のグリッド候補がt=n+1の座標に隣接しているかの判定
+        4. 予測確率の算出
+        '''
     
-        # 次の座標の候補の決定
+        # 次のグリッド候補の決定
         def coodinate(x_n, c):
             '''
             座標は真ん中が0, 右上から時計回りに1,2,3,4,5,6と番号を割り振り
@@ -78,9 +96,25 @@ class BaysianFilter:
 
             return cood_list
 
+        # マップマッチング
+        def mapMatching(cood_list, P_x_n_):
+            P = []
+            for num in range(len(cood_list)):
+                if cood_list[num][0, 0] < self.x_min or cood_list[num][0, 0] > self.x_max:
+                    P.append(0)
+                elif cood_list[num][1, 0] < self.y_min or cood_list[num][1, 0] > self.y_max:
+                    P.append(0)
+                else:
+                    P.append(P_x_n_[num])
+
+            return P
+
         # 隣接している六角形の判定
         def adjacent(x, pri_cood_list, c, motion):
             '''
+            引数
+            ・x: 移動候補の六角形のグリッドの一つの座標
+            ・t=nのグリッドの候補
             六角形の中心座標間の距離が移動半径と（ほぼ）等しい時隣接していると判定→motionの値をリストに追加
             移動半径と等しくない時は隣接していないと判定→0をリストに追加
             '''
@@ -95,7 +129,7 @@ class BaysianFilter:
 
             return P_motion
 
-        # 前回のそれぞれの位置から動いてきた確率の合計値を算出
+        # 前回のそれぞれの位置から動いてきた確率の合計値（予測確率）を算出
         def priPro(P_motion, P_):
             P = 0
             for num in range(len(P_motion)):
@@ -103,21 +137,9 @@ class BaysianFilter:
 
             return P
 
-        # マップマッチング
-        def mapMatching(cood_list, P_x_n_):
-            P = []
-            for num in range(len(cood_list)):
-                if cood_list[num][0, 0] < x_min or cood_list[num][0, 0] > x_max:
-                    P.append(0)
-                elif cood_list[num][1, 0] < y_min or cood_list[num][1, 0] > y_max:
-                    P.append(0)
-                else:
-                    P.append(P_x_n_[num])
-
-            return P
-
         list = []
         self.cood_list = coodinate(self.x_n, self.c)
+        #self.P_x_n_ = mapMatching(self.cood_list, self.P_x_n_) #マップマッチング機能は未実装
 
         for num in range(len(self.cood_list)):
             self.P_motion = adjacent(self.cood_list[num], self.pri_cood_list, self.c, self.motion)
@@ -131,10 +153,10 @@ class BaysianFilter:
     # 更新ステップ
     def update(self, y_n):
         '''
-        観測値から各候補位置の尤度を算出
-        観測値による尤度と各位置の予測確率を用いて各位置の推定確率を算出
-        候補位置の確率の正規化
-        正規化した確率の中から最も高い確率の位置を推定位置に決定
+        1. 観測値から各候補位置の尤度を算出
+        2. 観測値による尤度と各位置の予測確率を用いて各グリッドの事後確率を算出
+        3. 候補位置の確率の正規化
+        4. 正規化した確率の中から最も高い確率のグリッドの中心を推定位置に決定
         '''
 
         # 観測値から各位置の尤度を計算
@@ -154,39 +176,42 @@ class BaysianFilter:
                 return np.mat([[h_1], [h_2], [h_3]])
 
             n = []
-            #print(pdf)
             loc = h(x, p_i)
             for num in range(3):
-                n.append(norm.pdf(y_n[num, 0], loc[num, 0], scale_range))
+                l = -1/2*math.log(2*math.pi)-1/2*math.log(scale_range)-1/(2*scale_range**2)*(y_n[num, 0]-loc[num, 0])**2
+                n.append(l)
 
-            pdf = np.mat([n])
+            pdf = n[0] * n[1] * n[2]
             return pdf
 
-        def likable(like):
-            sum = 0
-            for num in range(len(like)):
-                sum += like[num]
+         #　尤度の正規化
+        def likeNormal(like):
+            '''
+            最大値を1、最小値を0にする正規化
+            ・引数
+                like : 尤度のリスト
+            ・返り値
+                likelihood : 正規化した尤度のリスト
+            '''
+            maxlike = max(like)
+            minlike = min(like)
 
-            like_new = []
-            for num in range(len(like)):
-                like_new.append(like[num] / sum)
+            likelihood = []
+            for l in like:
+                ll = (l - minlike) / (maxlike - minlike)
+                likelihood.append(ll)
 
-            for num in range(len(like)):
-                max = None
-                max = like[num] * np.mat([[1], [1], [1]])
-                print(max)
+            return likelihood
 
-            sum = 0
-            for num in range(len(like)):
-                sum += like[num]
-
-            like_new = []
-            for num in range(len(like)):
-                like_new.append(like[num] / sum)
-            #return like_new
-
-        # 尤度を元に各位置の確率を計算
+        # 尤度を元に各グリッドの事後確率を計算
         def likeToPro(P_x_n_, like):
+            '''
+            ・引数
+                P_x_n_ : 予測確率
+                like : 正規化された尤度
+            ・返り値
+                P_x_n : 事後確率
+            '''
             P_x_n = []
             for num in range(len(P_x_n_)):
                 P_x_n.append(P_x_n_[num] * like[num])
@@ -194,18 +219,23 @@ class BaysianFilter:
             return P_x_n
                 
         # 確率の正規化
-        def Normalization(P):
+        def proNormal(P):
+            '''
+            確率の総和を1にする正規化
+            ・引数
+                P : 確率のリスト
+            ・返り値
+                P_new : 正規化した確率
+            '''
             sum = 0
             for num in range(len(P)):
                 sum += P[num]
 
-            P_new = []
-            for num in range(len(P)):
-                P_new.append(P[num] / sum)
+            P_normal = []
+            for p in P:
+                P_normal.append(p / sum)
             
-            #print(P_new)
-
-            return P_new
+            return P_normal
 
         # 位置の候補の内，最も確率の高い位置を選択
         def selectX(x, P_x_n):
@@ -217,9 +247,12 @@ class BaysianFilter:
         for num in range(len(self.cood_list)):
             like.append(observe(self.cood_list[num], y_n, self.p_i, self.sigma_range))
         
-        likable(like)
-        like = Normalization(like)
+        like = likeNormal(like)
         self.P_x_n = likeToPro(self.P_x_n_, like)
+        print("pro : " + str(self.P_x_n))
+        self.P_x_n = proNormal(self.P_x_n)
+        print(self.P_x_n)
+        
         self.x_n = selectX(self.cood_list, self.P_x_n)
 
         return self.x_n

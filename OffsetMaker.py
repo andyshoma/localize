@@ -70,14 +70,15 @@ def main():
     
     return
 
-'''
-基地局と測位点との距離
-・引数
-    ・position：測位点の番号
-・返り値
-    ・基地局からの距離の真値（３次元行列）
-'''
+
 def getDistance(position):
+    '''
+    基地局と測位点との距離
+    ・引数
+      ・position：測位点の番号
+    ・返り値
+      ・基地局からの距離の真値（３次元行列）
+    '''
     AP_A = None
     AP_B = None
     AP_C = None
@@ -95,15 +96,16 @@ def getDistance(position):
 
     return np.mat([[distanceA], [distanceB], [distanceC]])
     
-'''
-端末IDごとの平均値を取得するための関数
-・引数
-    ・filename：読み込むファイルの名前
-    ・num：positionの番号
-・返り値
-    ・ave：平均値（３次元行列）
-'''
+
 def getAverage(filename, num):
+    '''
+    端末IDごとの平均値を取得するための関数
+    ・引数
+      ・filename：読み込むファイルの名前
+      ・num：positionの番号
+    ・返り値
+      ・ave：平均値（３次元行列）
+    '''
     sum = np.mat([[0], [0], [0]])
     length = 0
     ave = None
@@ -149,30 +151,32 @@ def getDev(filename, num):
             data = line.split(',')
             distance = int(data[0])
 
-'''
-端末IDごとに測距誤差の合計を計算する関数
-・引数
-    ・distanceMm：測距結果
-    ・trueDistance：測距の真値
-    ・ID：基地局にしている端末のID
-    ・sum：現在までの合計値（３次元行列）
-・返り値
-    ・sum：計算後の合計値（３次元行列）
-'''
+
 def getSum(distance, trueDistance, sum):
+    '''
+    端末IDごとに測距誤差の合計を計算する関数
+    ・引数
+      ・distanceMm：測距結果
+      ・trueDistance：測距の真値
+      ・ID：基地局にしている端末のID
+      ・sum：現在までの合計値（３次元行列）
+    ・返り値
+      ・sum：計算後の合計値（３次元行列）
+    '''
     sum[0][0] = sum[0, 0] + (distance[0, 0] - trueDistance[0, 0])
     sum[1][0] = sum[1, 0] + (distance[1, 0] - trueDistance[1, 0])
     sum[2][0] = sum[2, 0] + (distance[2, 0] - trueDistance[2, 0])
     return sum
 
-'''
-測位点を選択する関数
-・引数
-    ・num：positionの番号
-・返り値
-    ・測位点の座標(x, y)
-'''
+
 def selectPosition(num):
+  '''
+  測位点を選択する関数
+  ・引数
+    ・num：positionの番号
+  ・返り値
+    ・測位点の座標(x, y)
+  '''
   if num == 1:
     return np.mat([[TRUE_POSITION_1_X], [TRUE_POSITION_1_Y]])
   elif num == 2:

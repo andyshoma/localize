@@ -23,13 +23,14 @@ def main():
     x = np.mat([0, 0]).T
     c = 30
     p_i = np.mat([[AP_A_X, AP_A_Y], [AP_B_X, AP_B_Y], [AP_C_X, AP_C_Y]]).T
-    print(p_i)
     sigma_range = 300000
     y_n = np.mat([[1000], [2000], [1500]])
 
     now = bayesian.BaysianFilter(x, c, p_i, sigma_range)
+    #now.readMap(0, 10000, 0, 10000)
     now.prediction()
     now.update(y_n)
+    
 
 if __name__ == '__main__':
   main()
