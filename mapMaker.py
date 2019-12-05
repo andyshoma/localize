@@ -130,6 +130,7 @@ class MapMaker():
                 addList(list, back[0], back[0] + back[1], now - now_size[1] + 1)
 
             addList(list, now_size[0], now_size[0] + now_size[1] - 1, now - 1)
+            addList(list, now_size[0], now_size[0] + now_size[1] - 1, now)
             addList(list, now_size[0], now_size[0] + now_size[1] - 1, now + 1)
                     
             if forward[2] == 0 and forward[1] != None:
@@ -143,7 +144,7 @@ class MapMaker():
 
         self.path = path + filename
 
-        grid_list = []
+        data = {}
         id = 0  # 現在のグリッドの個数
         i = 0
         num = 0  # 列の始まりから現在までのグリッドの個数
@@ -153,12 +154,11 @@ class MapMaker():
         size = [firstID, self.for_adjcent[i][0], self.for_adjcent[0][1]]  # [最初のID, 列内のグリッドの個数, LorR]
 
         for list in self.map_list:
-            data = {}
-            data["ID"] = int(id)
-            data["cood"] = list
+            value = {}
+            value["cood"] = list
             if num < self.for_adjcent[i][0]:
                 forward = [firstID + self.for_adjcent[i][0], self.for_adjcent[i + 1][0], self.for_adjcent[i][1]]
-                data["adjacent"] = adjJudg(id, back, forward, size)
+                value["adjacent"] = adjJudg(id, back, forward, size)
             else:
                 back = size
                 num = 0
@@ -166,11 +166,11 @@ class MapMaker():
                 firstID = id
                 size = [firstID, self.for_adjcent[i][0], self.for_adjcent[i][1]]
                 forward = [firstID + self.for_adjcent[i][0], self.for_adjcent[i + 1][0], self.for_adjcent[i][1]]
-                data["adjacent"] = adjJudg(id, back, forward, size)
+                value["adjacent"] = adjJudg(id, back, forward, size)
 
-            grid_list.append(data)
+            data[int(id)] = value
             num += 1
             id += 1
 
         with open(self.path, mode='w') as fw:
-            fw.write(json.dumps(grid_list))
+            fw.write(json.dumps(data))

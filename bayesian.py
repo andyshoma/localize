@@ -1,6 +1,7 @@
 import math
 import numpy as np
 from scipy.stats import norm
+import json
 
 class BaysianFilter:
     '''
@@ -15,11 +16,13 @@ class BaysianFilter:
     cood_list = None
     pri_cood_list = None
 
+    # 隣接しているグリッド
+    grid_list = None
+    pri_grid_list = None
+
     # マップ情報
-    x_min = None
-    x_max = None
-    y_min = None
-    y_max = None
+    map_data = None
+    now_grid = None
 
     # システムモデル
     x_n = None
@@ -37,134 +40,163 @@ class BaysianFilter:
     
     # 更新式
     P_x_n = [1]
-    P_y_n = []
 
     
-    # コンストラクタ
-    def __init__(self, x, c, p_i, sigma_range):
+    def __init__(self, now_grid, p_i, sigma_range):
+        '''[コンストラクタ]
+        
+        Args:
+            p_i ([list]): [基地局の座標]
+            sigma_range ([float]): [観測値の分散]
         '''
-        引数は以下の４つ
-        ・x：初期位置
-        ・c：移動半径（グリッドの大きさを決定）
-        ・p_i：基地局の座標
-        ・sigma_range：観測値の分散
-        '''
-        self.x_n = x
-        self.c = c
+        self.now_grid = now_grid
         self.p_i = p_i
         self.sigma_range = sigma_range
-        self.pri_cood_list = np.mat([[x[0, 0], x[1, 0]]])
+        self.pri_grid_list = [self.now_grid]
 
     
-    # マップ情報の読み込み
-    def readMap(self, x_min, x_max, y_min, y_max):
-        self.x_min = x_min
-        self.x_max = x_max
-        self.y_min = y_min
-        self.y_max = y_max
-
+    def readMap(self, path):
+        '''[マップ情報の読み込み]
+        
+        Args:
+            filename ([String]): [jsonファイルのpath]
+        '''
+        with open(path, mode='r') as fr:
+            self.map_data = json.loads(fr.readline())
+            
 
     # 予測ステップ
     def prediction(self):
+        '''[予測ステップ]
+
+        1. 現在のグリッド情報の読み込み
+        2. 事前確率の算出
+        3. 予測確率の算出
         '''
-        1. t=n+1の時のグリッド候補の決定
-        2. グリッド候補が移動可能か判定（マップマッチング）
-        3. t=nの時のグリッド候補がt=n+1の座標に隣接しているかの判定
-        4. 予測確率の算出
-        '''
-    
-        # 次のグリッド候補の決定
-        def coodinate(x_n, c):
+
+        def readGridInfo(map_data, grid):
+            '''[現在のグリッド情報の読み込み]
+            
+            Args:
+                map_data ([dict]): [読み込んだjsonファイルの中のマップ情報]
+                grid ([Integer]): [現在のグリッド]
+            
+            Returns:
+                cood ([list]): [座標]
+                adj ([list]): [隣接しているグリッドのID]
             '''
-            座標は真ん中が0, 右上から時計回りに1,2,3,4,5,6と番号を割り振り
-            0は座標が変わらない
-            2,5は右に移動半径分進んだ位置
-            1,3,4,6は移動半径にsin, cosを用いて位置を決定
+            info_dict = map_data.get(str(grid))
+            cood = info_dict.get('cood')
+            adj = info_dict.get('adjacent')
+
+            return cood, adj
+
+        def priPro(grid_list, map_data, pri_grid_list, P_x_n):
+            '''[事前確率の算出]
+            
+            Args:
+                grid_list ([list]): [隣接しているグリッドリスト]
+                map_data ([dict]): [マップ情報]
+                pri_grid_list ([list]): [前回隣接していたグリッドリスト]
+                P_x_n ([mat]): [前回の事後確率]
+            
+            Returns:
+                [mat]: [事前確率]
             '''
-            cood_list = []
-            pi = math.pi
-            x = c * math.cos(pi / 3)
-            y = c * math.sin(pi / 3)
-
-            cood_list.append(x_n.T)                                                               # 0
-            cood_list.append(np.mat([[math.floor(x_n[0, 0] + x), math.floor(x_n[1, 0] + y)]]))    # 1
-            cood_list.append(np.mat([[math.floor(x_n[0, 0] + c), math.floor(x_n[1, 0])]]))        # 2
-            cood_list.append(np.mat([[math.floor(x_n[0, 0] + x), math.floor(x_n[1, 0] - y)]]))    # 3
-            cood_list.append(np.mat([[math.floor(x_n[0, 0] - x), math.floor(x_n[1, 0] - y)]]))    # 4
-            cood_list.append(np.mat([[math.floor(x_n[0, 0] - c), math.floor(x_n[1, 0])]]))        # 5
-            cood_list.append(np.mat([[math.floor(x_n[0, 0] - x), math.floor(x_n[1, 0] + y)]]))    # 6
-
-            return cood_list
-
-        # マップマッチング
-        def mapMatching(cood_list, P_x_n_):
             P = []
-            for num in range(len(cood_list)):
-                if cood_list[num][0, 0] < self.x_min or cood_list[num][0, 0] > self.x_max:
-                    P.append(0)
-                elif cood_list[num][1, 0] < self.y_min or cood_list[num][1, 0] > self.y_max:
-                    P.append(0)
-                else:
-                    P.append(P_x_n_[num])
 
-            return P
+            for grid in grid_list:
+                info_dict = map_data.get(str(grid))
+                adj = info_dict.get('adjacent')
+                TorF = []
+                # グリッド候補(grid_lsit)の隣接グリッド(adj)に前回のグリッド候補(pri_grid_list)が存在しているかどうかのチェック
+                for a in pri_grid_list:
+                    if a in adj:
+                        TorF.append(1)
+                    else:
+                        TorF.append(0)
+                mat = np.mat([TorF])  # 存在しているグリッドのTorFの行列(1)
+                adam = np.multiply(mat, P_x_n)  # 行列(1)と前回の事後確率とのアダマール積の行列(2)
+                P.append(np.sum(adam))  # 行列(2)内の値の総和
 
-        # 隣接している六角形の判定
-        def adjacent(x, pri_cood_list, c, motion):
+            return np.mat([P])
+
+        def predictPro(P_):
+            '''[予測確率]
+            
+            Args:
+                P_ ([mat]): [事前確率]
+            
+            Returns:
+                [mat]: [予測確率]
             '''
-            引数
-            ・x: 移動候補の六角形のグリッドの一つの座標
-            ・t=nのグリッドの候補
-            六角形の中心座標間の距離が移動半径と（ほぼ）等しい時隣接していると判定→motionの値をリストに追加
-            移動半径と等しくない時は隣接していないと判定→0をリストに追加
-            '''
-            list = []
-            for num in range(len(pri_cood_list)):
-                dis = math.sqrt((x[0, 0] - pri_cood_list[num][0, 0]) ** 2 + (x[0, 1] - pri_cood_list[num][0, 1]) ** 2)
-                if dis < c + 10 and dis > c - 10 or dis == 0:
-                    list.append(motion)
-                else:
-                    list.append(0)
-            P_motion = list
+            P = []
+            for i in range(P_.size):
+                P.append(1/7)
+            P_motion = np.mat([P])
 
-            return P_motion
+            return np.multiply(P_, P_motion)
 
-        # 前回のそれぞれの位置から動いてきた確率の合計値（予測確率）を算出
-        def priPro(P_motion, P_):
-            P = 0
-            for num in range(len(P_motion)):
-                P += P_motion[num] * P_[num]
 
-            return P
+        cood, adj = readGridInfo(self.map_data, self.now_grid)
+        self.grid_list = adj
+        P_ = priPro(self.grid_list, self.map_data, self.pri_grid_list, self.P_x_n)
+        self.P_x_n_ = predictPro(P_)
 
-        list = []
-        self.cood_list = coodinate(self.x_n, self.c)
-        #self.P_x_n_ = mapMatching(self.cood_list, self.P_x_n_) #マップマッチング機能は未実装
 
-        for num in range(len(self.cood_list)):
-            self.P_motion = adjacent(self.cood_list[num], self.pri_cood_list, self.c, self.motion)
-            P = priPro(self.P_motion, self.P_x_n)
-            list.append(P)
-
-        self.P_x_n_ = list
-        print(list)
 
 
     # 更新ステップ
     def update(self, y_n):
-        '''
+        '''[更新ステップ]
+        
         1. 観測値から各候補位置の尤度を算出
         2. 観測値による尤度と各位置の予測確率を用いて各グリッドの事後確率を算出
         3. 候補位置の確率の正規化
         4. 正規化した確率の中から最も高い確率のグリッドの中心を推定位置に決定
+        Args:
+            y_n ([list]): [観測値]
+        
+        Returns:
+            [list]: [現在の予測結果]
         '''
 
-        # 観測値から各位置の尤度を計算
-        def observe(x, y_n, p_i, scale_range):
+        def setCoodList(map_data, grid_list):
+            '''[グリッド候補の座標リストの作成]
+            
+            Args:
+                map_data ([dict]): [マップ情報]
+                grid_list ([list]): [グリッドIDのリスト]
+            
+            Returns:
+                [matrix]: [グリッド候補の座標]
             '''
+            
+            cood_list = []
+            for gridID in grid_list:
+                info = map_data.get(str(gridID))  # グリッド情報を取得
+                cood = info.get('cood') # 座標の取得
+                cood_list.append(np.mat(cood))
+
+            #print(cood_list)
+
+            return cood_list
+
+        def observe(x, y_n, p_i, scale_range):
+            '''[観測値からグリッドの尤度を計算]
+
             pdf : 観測結果による確率密度
             loc : ガウス分布の期待値
             scale_range : 標準偏差
+            
+            Args:
+                x ([list]): [グリッドの座標]
+                y_n ([list]): [観測値]
+                p_i ([list]): [基地局の座標]
+                scale_range ([float]): [標準偏差]
+            
+            Returns:
+                [float]: [観測結果による確率密度]
             '''
 
             # 基地局と位置の候補との距離を計算
@@ -184,14 +216,15 @@ class BaysianFilter:
             pdf = n[0] * n[1] * n[2]
             return pdf
 
-         #　尤度の正規化
         def likeNormal(like):
-            '''
+            '''[尤度の正規化]
+            
             最大値を1、最小値を0にする正規化
-            ・引数
-                like : 尤度のリスト
-            ・返り値
-                likelihood : 正規化した尤度のリスト
+            Args:
+                like ([list]): [尤度のリスト]
+            
+            Returns:
+                [matrix]: [正規化した尤度の行列]
             '''
             maxlike = max(like)
             minlike = min(like)
@@ -201,58 +234,85 @@ class BaysianFilter:
                 ll = (l - minlike) / (maxlike - minlike)
                 likelihood.append(ll)
 
-            return likelihood
+            print(likelihood)
 
-        # 尤度を元に各グリッドの事後確率を計算
+            return np.mat(likelihood)
+
         def likeToPro(P_x_n_, like):
+            '''[尤度を元に各グリッドの事後確率を計算]
+            
+            Args:
+                P_x_n_ ([list]): [予測確率]
+                like ([list]): [正規化された尤度]
+            
+            Returns:
+                [list]: [事後確率]
             '''
-            ・引数
-                P_x_n_ : 予測確率
-                like : 正規化された尤度
-            ・返り値
-                P_x_n : 事後確率
-            '''
-            P_x_n = []
-            for num in range(len(P_x_n_)):
-                P_x_n.append(P_x_n_[num] * like[num])
+            P_x_n = np.multiply(P_x_n_, like)
 
             return P_x_n
                 
-        # 確率の正規化
         def proNormal(P):
-            '''
-            確率の総和を1にする正規化
-            ・引数
-                P : 確率のリスト
-            ・返り値
-                P_new : 正規化した確率
-            '''
-            sum = 0
-            for num in range(len(P)):
-                sum += P[num]
+            '''[確率の総和を1にする正規化]
 
-            P_normal = []
-            for p in P:
-                P_normal.append(p / sum)
+            Args:
+                P ([list]): [確率のリスト]
+            
+            Returns:
+                [list]: [正規化した確率]
+            '''
+            pro = P.tolist()[0]
+            sum = 0
+            for p in pro:
+                sum += p
+
+            P_normal = P / sum
             
             return P_normal
 
-        # 位置の候補の内，最も確率の高い位置を選択
-        def selectX(x, P_x_n):
+        def selectX(cood_list, grid_list, P_x_n):
+            '''[位置の候補の内，最も確率の高いグリッドを選択]
+            
+            Args:
+                cood_list ([list]): [グリッド候補の座標のリスト]
+                grid_list ([list]): [グリッド候補のリスト]
+                P_x_n ([matrix]): [事後確率]
+            
+            Returns:
+                [matrix]: [最も確率の高いグリッドの座標]
+                [Integer]: [最も確率の高いグリッドID]
+            
+            Args:
+                grid_list ([type]): [description]
+                P_x_n ([type]): [description]
+            
+            Returns:
+                [type]: [description]
+            '''
             max = np.argmax(P_x_n)
             
-            return x[max]
+            return cood_list[max], grid_list[max]
 
+        # 座標候補リストの作成
+        self.cood_list = setCoodList(self.map_data, self.grid_list)
+        
+        # グリッドごとの尤度計算
         like = []
         for num in range(len(self.cood_list)):
             like.append(observe(self.cood_list[num], y_n, self.p_i, self.sigma_range))
         
+        # 尤度の正規化
         like = likeNormal(like)
-        self.P_x_n = likeToPro(self.P_x_n_, like)
-        print("pro : " + str(self.P_x_n))
-        self.P_x_n = proNormal(self.P_x_n)
-        print(self.P_x_n)
-        
-        self.x_n = selectX(self.cood_list, self.P_x_n)
 
-        return self.x_n
+        # 確率の計算と確率の正規化
+        self.P_x_n = likeToPro(self.P_x_n_, like)
+        self.P_x_n = proNormal(self.P_x_n)
+        #print("pro : " + str(self.P_x_n))
+
+        # 最も確率の高いグリッドの選択
+        self.x_n, self.now_grid = selectX(self.cood_list, self.grid_list, self.P_x_n)
+        self.x_n = self.x_n.T
+        self.pri_grid_list = self.grid_list
+        self.pri_cood_list = self.cood_list
+
+        return self.x_n, self.now_grid
