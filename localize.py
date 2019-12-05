@@ -71,9 +71,9 @@ TRUE_POSITION_9_Y = 4440
 FILE_NAME = 'bayesian'
 
 #計測点の数
-POINT_NUM = 9
+POINT_NUM = 1
 
-SELECT_NUM = 4
+SELECT_NUM = 9
 
 # カルマンフィルタのパラメータ
 O_WALK = 0.01
@@ -81,20 +81,27 @@ O_RANGE = 300000
 
 # ベイジアンフィルタのパラメータ
 x_now = np.mat([[TRUE_POSITION_1_X, TRUE_POSITION_1_Y]]).T
-c = 3000
 p_i = np.mat([[AP_A_X, AP_A_Y], [AP_B_X, AP_B_Y], [AP_C_X, AP_C_Y]]).T
-sigma_range = 30000000
+sigma_range = 23000000
+now_grid = 0
+
+# カルマンフィルタ(1)orベイジアンフィルタ(2)の選択
+filter = 1
 
 def main():
+
+
+  er_sum = 0
+
   #基地局からの距離
   dis_deviceA = 0
   dis_deviceB = 0
   dis_deviceC = 0
 
-  '''c = np.mat([[1, 0], [0, 1]])
+  c = np.mat([[1, 0], [0, 1]])
   p_1 = np.mat([[AP_A_X], [AP_A_Y]])
   p_2 = np.mat([[AP_B_X], [AP_B_Y]])
-  p_3 = np.mat([[AP_C_X], [AP_C_Y]])'''
+  p_3 = np.mat([[AP_C_X], [AP_C_Y]])
 
   draw = drawing.drawing()
   draw.setAxes(-1000, 13000, -1000, 18000)
@@ -110,14 +117,19 @@ def main():
     truePosition = selectPosition(i + 1)
     draw.drawCircle(truePosition[0][0], truePosition[1][0], 100, "#050A11", True)'''
 
+  
   for num in range(POINT_NUM):
     filename = FILE_NAME
     truePosition = selectPosition(1)
-    #kf = kalman.KalmanFilter(0, 0, p_1, p_2, p_3)
-    #kf.setModel(O_WALK, O_RANGE)
-    bf = bayesian.BaysianFilter(x_now, c, p_i, sigma_range)
+    if filter == 1:
+      kf = kalman.KalmanFilter(0, 0, p_1, p_2, p_3)
+      kf.setModel(O_WALK, O_RANGE)
+    elif filter == 2:
+        bf = bayesian.BaysianFilter(now_grid, p_i, sigma_range)
+        bf.readMap('/Users/andy/Wifi_rtt/mapInfo.json')
+
     with open('/Users/andy/Wifi_rtt/bayesian/bays' + str(num+1) + '.csv', mode='w') as fw:
-     with open('/Users/andy/Wifi_rtt/position' + str(num+1) + '.csv', encoding='utf-8', mode='r') as f:
+     with open('/Users/andy/Wifi_rtt/position9.csv', encoding='utf-8', mode='r') as f:
       f.readline()
       for line in f:
           data = line.split(',')
@@ -136,22 +148,34 @@ def main():
           #測距結果を用いて測位
           if dis_deviceA != 0 and dis_deviceB != 0 and dis_deviceC != 0:
             Z = np.mat([[dis_deviceA], [dis_deviceB], [dis_deviceC]])
-            #kf.estimate()
-            #kf.filter(Z)
-            bf.prediction()
-            x = bf.update(Z)
-            print(x)
+            if filter == 1:
+              kf.estimate()
+              kf.filter(np.square(Z))
+              x = kf.getStatus()
+            elif filter == 2:
+              '''grid_ = None
+              grid = None'''
+              bf.prediction()
+              x, grid = bf.update(Z)
+              #print('選択された座標 : ' + str(x))
+              print('選択されたグリッド :' + str(grid))
+              '''if grid_ == grid:
+                break
+              grid_ = grid'''
+            
             dis_deviceA = 0
             dis_deviceB = 0
             dis_deviceC = 0
-            #x = kf.getStatus()
-            er = error(x, num+1)
+            er = error(x, num + 1)
+            er_sum += er
             fw.write(str(x[0, 0]) + ',' + str(x[1, 0]) + ',' + str(er) + ',' + '\n')
-            draw.drawCircle(x[0,0], x[1,0], 100, "#EDAD0B", True)
-            #draw.pause(0.3)
+            draw.drawCircle(x[0, 0], x[1, 0], 100, "#EDAD0B", True)
+            #print('a')
+            draw.pause(0.5)
 
-  draw.show()
-  
+  print(er)
+  #draw.show()
+
   return
 
 '''
@@ -234,18 +258,6 @@ def triangulation(disA, disB, disC):
   x1 = ((AP_C_Y - AP_B_Y) * va_1 - (AP_A_Y - AP_B_Y) * vb_1) / ((AP_A_X -
                                                                  AP_B_X) * (AP_C_Y - AP_B_Y) - (AP_C_X - AP_B_X) * (AP_A_Y - AP_B_Y))
   y1 = (va_1 - x1 * (AP_A_X - AP_B_X)) / (AP_A_Y - AP_B_Y)
-
-  '''va_2 = ((disA * disA - disB * disB) - (AP_A_X * AP_A_X - AP_B_X * AP_B_X) - (AP_A_Y * AP_A_Y - AP_B_Y * AP_B_Y)) / 2
-  vb_2 = ((disA * disA - disC * disC) - (AP_A_X * AP_A_X - AP_C_X * AP_C_X) - (AP_A_Y * AP_A_Y - AP_C_Y * AP_C_Y)) / 2
-
-  x2 = ((AP_C_Y - AP_A_Y) * va_2 - (AP_B_Y - AP_A_Y) * vb_2) / ((AP_B_X - AP_A_X) * (AP_C_Y - AP_A_Y) - (AP_C_X - AP_A_X) * (AP_B_Y - AP_A_Y))
-  y2 = (va_2 - x2 * (AP_B_X - AP_A_X)) / (AP_B_Y - AP_A_Y)
-
-  va_3 = ((disC * disC - disA * disA) - (AP_C_X * AP_C_X - AP_A_X * AP_A_X) - (AP_C_Y * AP_C_Y - AP_A_Y * AP_A_Y)) / 2
-  vb_3 = ((disC * disC - disB * disB) - (AP_C_X * AP_C_X - AP_B_X * AP_B_X) - (AP_C_Y * AP_C_Y - AP_B_Y * AP_B_Y)) / 2
-
-  x3 = ((AP_A_Y - AP_C_Y) * va_3 - (AP_B_Y - AP_C_Y) * vb_3) / ((AP_B_X - AP_C_X) * (AP_A_Y - AP_C_Y) - (AP_A_X - AP_C_X) * (AP_B_Y - AP_C_Y))
-  y3 = (va_3 - x3 * (AP_A_X - AP_C_X)) / (AP_A_Y - AP_C_Y)'''
 
   return x1, y1
 
