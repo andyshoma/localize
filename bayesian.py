@@ -41,6 +41,9 @@ class BaysianFilter:
     # 更新式
     P_x_n = [1]
 
+    # 尤度計算のモードの切り替え(ガウス分布=0, ベイズ推定量=1)
+    mode = 0
+
     
     def __init__(self, now_grid, p_i, sigma_range):
         '''[コンストラクタ]
@@ -144,8 +147,6 @@ class BaysianFilter:
         self.P_x_n_ = predictPro(P_)
 
 
-
-
     # 更新ステップ
     def update(self, y_n):
         '''[更新ステップ]
@@ -201,20 +202,93 @@ class BaysianFilter:
 
             # 基地局と位置の候補との距離を計算
             def h(x, p_i):
-                h_1 = (x[0, 0] - p_i[0, 0]) ** 2 + (x[0, 1] - p_i[0, 1]) ** 2
-                h_2 = (x[0, 0] - p_i[1, 0]) ** 2 + (x[0, 1] - p_i[1, 1]) ** 2
-                h_3 = (x[0, 0] - p_i[0, 2]) ** 2 + (x[0, 1] - p_i[1, 2]) ** 2
+                h_1 = ((x[0, 0] - p_i[0, 0]) ** 2 + (x[0, 1] - p_i[0, 1]) ** 2) ** 0.5
+                h_2 = ((x[0, 0] - p_i[1, 0]) ** 2 + (x[0, 1] - p_i[1, 1]) ** 2) ** 0.5
+                h_3 = ((x[0, 0] - p_i[0, 2]) ** 2 + (x[0, 1] - p_i[1, 2]) ** 2) ** 0.5
 
                 return np.mat([[h_1], [h_2], [h_3]])
 
             n = []
             loc = h(x, p_i)
             for num in range(3):
+                # 正規分布の尤度計算（対数への変換）
                 l = -1/2*math.log(2*math.pi)-1/2*math.log(scale_range)-1/(2*scale_range**2)*(y_n[num, 0]-loc[num, 0])**2
                 n.append(l)
 
             pdf = n[0] * n[1] * n[2]
             return pdf
+
+        def bayesLisk(x, y_n, p_i):
+            '''[観測値からベイズ推定量を計算]
+            
+            Args:
+                x ([list]): [グリッドの座標]
+                y_n ([list]): [観測値]
+                p_i ([list]): [基地局の座標]
+            
+            Returns:
+                [float]: [ベイズリスク]
+            '''
+
+            # 基地局と位置の候補との距離を計算
+            def h(x, p_i):
+                h_1 = ((x[0, 0] - p_i[0, 0]) ** 2 + (x[0, 1] - p_i[0, 1]) ** 2) ** 0.5
+                h_2 = ((x[0, 0] - p_i[1, 0]) ** 2 + (x[0, 1] - p_i[1, 1]) ** 2) ** 0.5
+                h_3 = ((x[0, 0] - p_i[0, 2]) ** 2 + (x[0, 1] - p_i[1, 2]) ** 2) ** 0.5
+
+                return np.mat([[h_1], [h_2], [h_3]])
+
+            '''
+            def errorToLike(error):
+                max_error = error.max()
+                min_error = error.min()
+                deno = max_error - min_error  # 分母
+                max = 1
+                min = 0.3
+                norm = max - min
+                
+                pdf = 1
+                for num in range(len(error)):
+                    like = (error[num, 0] - min_error) / deno
+
+                    print("like:" + str(like))
+                    pdf *= like
+                    
+                return pdf'''
+
+            # 観測値とh()との2乗誤差
+            dif = y_n - h(x, p_i)
+            square_error = np.multiply(dif, dif)
+
+            # ベイズ推定量の算出
+            error_sum = 0
+            for num in range(len(square_error)):
+                error_sum += square_error[num, 0]
+            bayes_lisk = error_sum / len(square_error)
+
+            return bayes_lisk
+
+        def errorToLike(lisk):
+            '''[ベイズリスクから存在確率を算出]
+            
+            Args:
+                lisk ([list]): [ベイズリスク]
+            
+            Returns:
+                [list]: [グリッド毎の存在確率]
+            '''
+            
+            max_error = max(lisk)
+            min_error = min(lisk)
+            deno = max_error - min_error  # 分母
+
+            like = []
+            for num in range(len(lisk)):
+                like.append((lisk[num] - min_error) / deno)
+
+            print("like:" + str(like))
+
+            return like
 
         def likeNormal(like):
             '''[尤度の正規化]
@@ -281,28 +355,31 @@ class BaysianFilter:
             Returns:
                 [matrix]: [最も確率の高いグリッドの座標]
                 [Integer]: [最も確率の高いグリッドID]
-            
-            Args:
-                grid_list ([type]): [description]
-                P_x_n ([type]): [description]
-            
-            Returns:
-                [type]: [description]
             '''
+
             max = np.argmax(P_x_n)
             
             return cood_list[max], grid_list[max]
 
         # 座標候補リストの作成
         self.cood_list = setCoodList(self.map_data, self.grid_list)
-        
-        # グリッドごとの尤度計算
+
         like = []
-        for num in range(len(self.cood_list)):
-            like.append(observe(self.cood_list[num], y_n, self.p_i, self.sigma_range))
-        
-        # 尤度の正規化
-        like = likeNormal(like)
+        if self.mode == 0:
+            # ガウス分布を用いた尤度計算
+            for num in range(len(self.cood_list)):
+                like.append(observe(self.cood_list[num], y_n, self.p_i, self.sigma_range))    
+            # 尤度の正規化
+            like = likeNormal(like)
+
+        else:
+            # ベイズリスクの算出
+            bayes_lisk = []
+            for num in range(len(self.cood_list)):
+                bayes_lisk.append(-bayesLisk(self.cood_list[num], y_n, self.p_i))
+            # ベイズ推定量を用いた尤度計算
+            like = errorToLike(bayes_lisk)
+        print(like)
 
         # 確率の計算と確率の正規化
         self.P_x_n = likeToPro(self.P_x_n_, like)
