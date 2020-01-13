@@ -8,77 +8,77 @@ from matplotlib import image as mpimg
 
 class drawing():
 
-  '''
-  コンストラクタ
-  '''
-
   def __init__(self):
+    '''[コンストラクタ]
+    '''
     self.fig = plt.figure()
     self.ax = self.fig.add_subplot(111)
     plt.axes().set_aspect('equal')
 
-  '''
-  座標軸の設定
-  引数は以下の４つ
-  　・x_min, x_max：x軸の最小値と最大値（x_min < x < x_max)
-  　・y_min, y_max：y軸の最小値と最大値（y_min < y < y_max）
-  '''
 
   def setAxes(self, x_min, x_max, y_min, y_max):
+    '''[座標軸の設定]
+    
+    Args:
+        x_min ([long]): [x軸の最小値]
+        x_max ([long]): [x軸の最大値]
+        y_min ([long]): [y軸の最小値]
+        y_max ([long]): [y軸の最大値]
+    '''
     self.ax.set_xlim(x_min, x_max)
     self.ax.set_ylim(y_min, y_max)
 
-  '''
-  円を書くためのメソッド
-  引数は以下の５つ
-    ・x, y：long型　円の中心座標
-    ・radius：long型　円の半径
-    ・color：String型　縁の色（例：red, blue, #FFFFFF, #C7243A）
-    ・fill：bool型　図形の塗りつぶし（True：塗りつぶし, False：塗りつぶしなし）
-  '''
 
   def drawCircle(self, x, y, radius, color, fill):
+    '''[円を書くメソッド]
+    
+    Args:
+        x ([long]): [円の中心のx座標]
+        y ([long]): [円の中心のy座標]
+        radius ([long]): [円の半径]
+        color ([String]): [円の色]
+        fill ([bool]): [図形の塗りつぶし（True：塗りつぶし, False：塗りつぶしなし）]
+    '''
     circle = pat.Circle(xy=(x, y), radius=radius, color=color, fill=fill)
     self.ax.add_patch(circle)
 
-  '''
-  四角形を書くためのメソッド
-  引数は以下の6つ
-    ・x, y：long型　四角形の始点の座標
-    ・width：long型　横の長さ
-    ・height：long型　縦の長さ
-    ・color：String型　縁の色（例：red, blue, #FFFFFF, #C7243A）
-    ・fill：bool型　図形の塗りつぶし（True：塗りつぶし, False：塗りつぶしなし）
-  '''
 
   def drawSquare(self, x, y, width, height, color, fill):
+    '''[四角形を書くメソッド]
+    
+    Args:
+        x ([long]): [四角形の始点のx座標]
+        y ([type]): [四角形の始点のy座標]
+        width ([long]): [横の長さ]
+        height ([long]): [縦の長さ]
+        color ([String]): [四角形の色]
+        fill ([bool]): [図形の塗り潰し（True：塗りつぶし, False：塗りつぶしなし）]
+    '''
     rec = pat.Rectangle(xy=(x, y), width=width, height=height,
                         color=color, fill=fill)
     self.ax.add_patch(rec)
 
-  '''
-  背景画像の設定
-  引数は以下の１つ
-    ・img_pass：String型　画像の相対パス
-  '''
 
   def imshow(self, img_pass):
+    '''[景画像の設定]
+    
+    Args:
+        img_pass ([String]): [画像の相対パス]
+    '''
     img = mpimg.imread(img_pass)
     self.ax.imshow(img)
 
-  '''
-  図形の連続描写
-  引数は以下の1つ
-  　・interval：long型　図形の表示間隔（秒単位）
-  '''
 
   def pause(self, interval):
+    '''[図形の連続描画]
+    
+    Args:
+        interval ([long]): [図形の表示間隔（秒単位）]
+    '''
     plt.pause(interval)
 
-  '''
-  図形の描写
-  引数はなし
-  '''
 
   def show(self):
+    '''[図形の描画]
+    '''
     plt.show()
