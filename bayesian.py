@@ -43,7 +43,6 @@ class BaysianFilter:
 
     # 尤度計算のモードの切り替え(ガウス分布=0, ベイズ推定量=1)
     mode = 0
-
     
     def __init__(self, now_grid, p_i, sigma_range):
         '''[コンストラクタ]
@@ -55,7 +54,7 @@ class BaysianFilter:
         self.now_grid = now_grid
         self.p_i = p_i
         self.sigma_range = sigma_range
-        self.pri_grid_list = [self.now_grid]
+        self.pri_grid_list = [now_grid]
 
     
     def readMap(self, path):
@@ -124,18 +123,19 @@ class BaysianFilter:
 
             return np.mat([P])
 
-        def predictPro(P_):
+        def predictPro(P_, grid_len):
             '''[予測確率]
             
             Args:
                 P_ ([mat]): [事前確率]
+                grid_len ([int]): [隣接しているグリッドの数]
             
             Returns:
                 [mat]: [予測確率]
             '''
             P = []
             for i in range(P_.size):
-                P.append(1/7)
+                P.append(1/grid_len)
             P_motion = np.mat([P])
 
             return np.multiply(P_, P_motion)
@@ -144,7 +144,11 @@ class BaysianFilter:
         cood, adj = readGridInfo(self.map_data, self.now_grid)
         self.grid_list = adj
         P_ = priPro(self.grid_list, self.map_data, self.pri_grid_list, self.P_x_n)
-        self.P_x_n_ = predictPro(P_)
+        p = []
+        for num in range(len(P_)):
+            p.append(1 / len(self.grid_list))
+        #self.P_x_n_ = predictPro(P_, len(self.grid_list))
+        self.P_x_n_ = [p]
 
 
     # 更新ステップ
@@ -286,7 +290,7 @@ class BaysianFilter:
             for num in range(len(lisk)):
                 like.append((lisk[num] - min_error) / deno)
 
-            print("like:" + str(like))
+            #print("like:" + str(like))
 
             return like
 
@@ -308,7 +312,7 @@ class BaysianFilter:
                 ll = (l - minlike) / (maxlike - minlike)
                 likelihood.append(ll)
 
-            print(likelihood)
+            #print(likelihood)
 
             return np.mat(likelihood)
 
@@ -353,7 +357,7 @@ class BaysianFilter:
                 P_x_n ([matrix]): [事後確率]
             
             Returns:
-                [matrix]: [最も確率の高いグリッドの座標]
+                [mat]: [最も確率の高いグリッドの座標]
                 [Integer]: [最も確率の高いグリッドID]
             '''
 
@@ -377,14 +381,13 @@ class BaysianFilter:
             bayes_lisk = []
             for num in range(len(self.cood_list)):
                 bayes_lisk.append(-bayesLisk(self.cood_list[num], y_n, self.p_i))
+            #print("list:" + str(bayes_lisk))
             # ベイズ推定量を用いた尤度計算
             like = errorToLike(bayes_lisk)
-        print(like)
 
         # 確率の計算と確率の正規化
         self.P_x_n = likeToPro(self.P_x_n_, like)
         self.P_x_n = proNormal(self.P_x_n)
-        #print("pro : " + str(self.P_x_n))
 
         # 最も確率の高いグリッドの選択
         self.x_n, self.now_grid = selectX(self.cood_list, self.grid_list, self.P_x_n)

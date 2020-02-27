@@ -35,75 +35,107 @@ class KalmanFilter:
   P_2 = None
   P_3 = None
 
-  '''
-  コンストラクタ
-  引数は以下の２つ
-  initial_x, initial_y : long型のリスト　初期位置
-  '''
 
   def __init__(self, initial_x, initial_y, p_1, p_2, p_3):
+    '''[コンストラクタ]
+    
+    Args:
+        initial_x ([long]): [初期位置のx座標]
+        initial_y ([long]): [初期位置のy座標]
+        p_1 ([mat]): [基地局1の座標]
+        p_2 ([mat]): [基地局2の座標]
+        p_3 ([mat]): [基地局3の座標]
+    '''
     self.x = np.mat([[initial_x], [initial_y]])
     self.P_1 = p_1
     self.P_2 = p_2
     self.P_3 = p_3
 
-  '''
-  状態モデルと観測モデルの設定
-  引数は５つ
-  状態モデル x = x + v, v~N(0,Q)
-  観測モデル z_ = h(x) + w, w~N(0,R)
-  '''
 
-  def setModel(self, o_walk, o_range):
+  def setModel(self, o_walk, o_range, r=0):
+    '''[状態モデルと観測モデルの設定]
+
+    状態モデル x = x + v, v~N(0,Q)
+    観測モデル z_ = h(x) + w, w~N(0,R)
+    
+    Args:
+        o_walk ([int]): [状態モデルの誤差分散]
+        o_range ([int]): [観測モデルの誤差分散]
+    '''
     #self.C = c
     self.A = np.mat([[1, 0], [0, 1]])
     self.Q = np.mat([[o_walk, 0], [0, o_walk]])
     self.R = np.mat([[o_range, 0, 0], [0, o_range, 0], [0, 0, o_range]])
-    self.P = np.mat([[0, 0], [0, 0]])
+    self.P = np.mat([[r, 0], [0, r]])
 
-  # 推定
-  '''
-  事前状態推定値　x_(k) = A * x(k-1)
-  線型近似　ヤコビアン計算
-  事前誤差共分散行列　P_(k) = A * P(k-1) * A.T + Q(k-1)
-  '''
 
   def estimate(self):
+    '''[推定ステップ]
+
+    事前状態推定値　x_(k) = A * x(k-1)
+    線型近似　ヤコビアン計算
+    事前誤差共分散行列　P_(k) = A * P(k-1) * A.T + Q(k-1)
+
+    '''
     self.x_ = self.A * self.x
     self.C = self.C_(self.x_)
     self.P_ = self.P + self.Q
-    print("x_" + str(self.x))
-    print("P_ : " + str(self.P_))
-    print("C : " + str(self.C))
 
-  # 更新
-  '''
-  カルマンゲイン　G(k) = P_(k) * C(k) * (c(k) * P_(k) * c(k).T + R(k)).I
-  状態推定値　x(k) = x_(k) + G(k) * (z(k) - h(x_(k)))
-  事後誤差共分散行列　P(k) = (I - g(k) * c(k)) * P_(k)
-  '''
 
   def filter(self, Z):
+    '''[更新ステップ]
+
+    カルマンゲイン　G(k) = P_(k) * C(k) * (c(k) * P_(k) * c(k).T + R(k)).I
+    状態推定値　x(k) = x_(k) + G(k) * (z(k) - h(x_(k)))
+    事後誤差共分散行列　P(k) = (I - g(k) * c(k)) * P_(k)
+    
+    Args:
+        Z ([mat]): [観測値]
+    '''
     S = self.C * self.P_ * self.C.T + self.R
     self.G = self.P_ * self.C.T * S.I
-    print('G: ' + str(self.G))
     I = np.mat([[1, 0], [0, 1]])
     self.P = (I - self.G * self.C) * self.P_
-    print('P: ' + str(self.P))
     self.x = self.x_ + self.G * (Z - self.h(self.x_))
-    print("x" + str(self.x))
 
   # h(x_k)
   def h(self, x):
+    '''[h(x_k)]
+    
+    Args:
+        x ([type]): [description]
+    
+    Returns:
+        [type]: [description]
+    '''
     return np.mat([[self.h_(x, self.P_1)], [self.h_(x, self.P_2)], [self.h_(x, self.P_3)]])
 
-  # ２乗の場合
 
+  
   def h_(self, x, p):
+    '''[推定距離の2乗の値を算出]
+    
+    Args:
+        x ([list]): [事前状態（予測位置）]
+        p ([list]): [基地局の座標]
+    
+    Returns:
+        [float]: [推定距離の2乗]
+    '''
     return (x[0, 0] - p[0, 0]) ** 2 + (x[1, 0] - p[1, 0]) ** 2
 
-  # ヤコビアン
+
   def C_(self, x_):
+    '''[ヤコビアン]
+    
+    入力値が2乗の場合のヤコビアン
+
+    Args:
+        x_ ([list]): [事前状態]
+    
+    Returns:
+        [mat]: [ヤコビアンの計算結果]
+    '''
     return np.mat([[2 * (x_[0, 0] - self.P_1[0, 0]), 2 * (x_[1, 0] - self.P_1[1, 0])], [2 * (x_[0, 0] - self.P_2[0, 0]), 2 * (x_[1, 0] - self.P_2[1, 0])], [2 * (x_[0, 0] - self.P_3[0, 0]), 2 * (x_[1, 0] - self.P_3[1, 0])]])
 
   '''
@@ -119,6 +151,10 @@ class KalmanFilter:
     return np.mat([[((self.x_[0, 0]-self.P_1[0, 0])/h_1), ((self.x_[1, 0]-self.P_1[1, 0])/h_1)], [((self.x_[0, 0]-self.P_2[0, 0])/h_2), ((self.x_[1, 0]-self.P_1[1, 0])/h_2)], [((self.x_[0, 0]-self.P_1[0, 0])/h_3), ((self.x_[1, 0]-self.P_1[1, 0])/h_3)]])
   '''
 
-  # 状態情報を取得
   def getStatus(self):
+    '''[状態情報（位置情報）の取得]
+    
+    Returns:
+        [list]: [現在位置]
+    '''
     return self.x
