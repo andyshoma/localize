@@ -1,6 +1,6 @@
 import json
 from scipy.stats import norm
-from new_kalman import*
+from filter.new_kalman import*
 from world import*
 
 
@@ -12,11 +12,21 @@ def read_map(path):
 
 
 def read_grid_info(map_data, grid_num):
+    ''' グリッド情報の読み込み
+
+    Args:
+        map_data: マップ情報（dictionary形式）
+        grid_num: グリッド番号
+
+    Returns: [coodinate, adjacent, enable]
+
+    '''
     info = map_data.get(str(grid_num))
     coodinate = info.get('cood')
     adjacent = [Grid(id, map_data.get(str(id)).get('cood')) for id in info.get('adjacent')]
+    enable = info.get('enable')
 
-    return coodinate, adjacent
+    return [coodinate, adjacent, enable]
 
 
 def prior_probability(adjacent_grid, map_data):
@@ -38,6 +48,15 @@ def max_adjacent(adjacent):
 
 
 def search(path, cood):
+    '''指定した座標と最も近いグリッドの探索
+
+    Args:
+        path: マップ情報のファイルパス
+        cood: 指定した座標
+
+    Returns: 最も近いグリッドID
+
+    '''
     with open(path, mode='r') as fr:
         map_data = json.load(fr)
 
@@ -54,7 +73,6 @@ def search(path, cood):
             mindis = dis
 
     return minkey
-
 
 
 class Grid:
@@ -77,7 +95,8 @@ class Grid:
             grid_suggest_pos = observation_function(self.cood, ap_pos)
 
             # 尤度の計算
-            self.weight *= norm.pdf(z, loc=grid_suggest_pos, scale=distance_dev_rate)
+            distance_dev = distance_dev_rate * grid_suggest_pos/1000
+            self.weight *= norm.pdf(z, loc=grid_suggest_pos, scale=distance_dev)
 
 
 class Bayesian:
@@ -106,7 +125,9 @@ class Bayesian:
         self.map_data = read_map(path)
 
     def motion_update(self):
-        self.grid.cood, self.adjacent = read_grid_info(self.map_data, self.grid.id)
+        data = read_grid_info(self.map_data, self.grid.id)
+        self.cood = data[0]
+        self.adjacent = data[1]
         for adj in self.adjacent: adj.motion_update(len(self.adjacent))
 
     def observation_update(self, observation):

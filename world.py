@@ -1,13 +1,11 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import matplotlib
-import matplotlib.animation as anm
-import matplotlib.pyplot as plt
-import math
 import matplotlib.patches as patches
 import numpy as np
-from new_kalman import *
+import matplotlib.pyplot as plt
+import matplotlib.animation as anm
+import math
 
 
 def get_observation(path):
@@ -48,6 +46,26 @@ def calibration(obs):
 
     return obs
 
+def observation_error(envmap, observation, i):
+    errors = []
+    for id in observation:
+        z = observation[id][0]
+        ap_pos = None
+        for ap in envmap.aps:
+            if ap.id == id: ap_pos = ap.pos
+
+        distance_true = observation_function(envmap.rps[(i-1)%8].pos, ap_pos)
+        error = int(z - distance_true)
+        errors.append(str(id) + " : " + str(error))
+
+    return errors
+
+def observation_function(pose, landmark_pos):
+    '''観測方程式の右辺'''
+    dif = pose - landmark_pos
+    return math.sqrt(dif[0]**2 + dif[1]**2)
+
+
 class World:
     def __init__(self, time_span, time_interval, debug=False):
         self.objects = []
@@ -78,7 +96,7 @@ class World:
 
     def one_step(self, i, elems, ax):
         while elems: elems.pop().remove()
-        time_str = "t = %.2f[s]" % (self.time_interval * i)
+        time_str = "t = %d" % (i+1)
         elems.append(ax.text(-4.4, 4.5, time_str, fontsize=10))
         for obj in self.objects:
             obj.draw(ax, elems)
@@ -95,13 +113,14 @@ class Pedestrian:
         self.estimator = estimator
         self.observations = get_observation("/Users/andy/Wifi_rtt/localize0117/positionA.csv")
         self.observations = calibration(self.observations)
+        self.errors = [0, 0, 0]
 
     def draw(self, ax, elems):  ### call_agent_draw
-        x, y = self.pose
-        c = patches.Circle(xy=(x, y), radius=self.r, fill=True, color=self.color)
-        elems.append(ax.add_patch(c))
         self.poses.append(self.pose)
         elems += ax.plot([e[0] for e in self.poses], [e[1] for e in self.poses], linewidth=0.5, color="black")
+        elems.append(ax.text(-4.4, 17000, str(self.errors[0]), fontsize=8))
+        elems.append(ax.text(-4.4, 16000, str(self.errors[1]), fontsize=8))
+        elems.append(ax.text(-4.4, 15000, str(self.errors[2]), fontsize=8))
         if self.sensor and len(self.poses) > 1:
             self.sensor.draw(ax, elems, self.poses[-2])
         if self.estimator and hasattr(self.estimator, "draw"):
@@ -110,6 +129,7 @@ class Pedestrian:
     def one_step(self, time_interval, i):
         self.estimator.motion_update()
         self.estimator.observation_update(self.observations[i])
+        self.errors = observation_error(self.estimator.map, self.observations[i], i)
 
 
 class AccessPoint:
@@ -181,6 +201,7 @@ class Map:
         for lm in self.aps: lm.draw(ax, elems)
         for lm in self.rps: lm.draw(ax, elems)
         for lm in self.obs: lm.draw(ax, elems)
+
 
 
 if __name__ == '__main__':

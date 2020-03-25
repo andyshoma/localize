@@ -22,18 +22,13 @@ def matH(pose, ap_pos):
     q = (mux - mx)**2 + (muy - my)**2
     return np.array([[(mux - mx)/np.sqrt(q), (muy - my)/np.sqrt(q)]])
 
-def observation_function(pose, landmark_pos):
-    '''観測方程式の右辺'''
-    dif = pose - landmark_pos
-    return math.sqrt(dif[0]**2 + dif[1]**2)
-
 def matR(distance_dev):
     return np.diag(np.array([distance_dev**2]))
 
 
 class Kalman:
-    def __init__(self, envmap, init_pose, motion_noise_stds=np.diag([100,100]), distance_dev_rate=300):
-        self.belief = multivariate_normal(mean=init_pose, cov=np.diag([100, 100]))
+    def __init__(self, envmap, init_pose, motion_noise_stds=np.diag([1000000,1000000]), distance_dev_rate=3000):
+        self.belief = multivariate_normal(mean=init_pose, cov=np.diag([100000, 100000]))
         self.pose = self.belief.mean
         self.motion_noise_stds = motion_noise_stds
         self.map = envmap
@@ -80,6 +75,7 @@ class Kalman:
             self.poses.pop(-9)
         self.poses.append(self.pose)
         elems += ax.plot([e[0] for e in self.poses], [e[1] for e in self.poses], linewidth=0.5, color="black")
+
 
 if __name__ == '__main__':
     world = World(100, 0.5)
